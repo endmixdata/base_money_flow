@@ -37,6 +37,21 @@ CREATE TABLE IF NOT EXISTS uniswap_swaps (
   timestamp TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS trades (
+  tx_hash TEXT,
+  block_number BIGINT,
+  trader TEXT,
+  side TEXT,              -- buy / sell
+  eth_amount NUMERIC,
+  usdc_amount NUMERIC,
+  usd_value NUMERIC,
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_trades_block ON trades(block_number);
+CREATE INDEX idx_trades_trader ON trades(trader);
+CREATE INDEX idx_trades_side ON trades(side);
+
 CREATE INDEX idx_uni_swaps_block ON uniswap_swaps(block_number);
 CREATE INDEX idx_uni_swaps_pool ON uniswap_swaps(pool);
 

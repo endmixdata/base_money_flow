@@ -12,6 +12,9 @@ UNISWAP_POOL = Web3.to_checksum_address(
     "0xd0b53D9277642d899DF5C87A3966A349A798F224"
 )
 
+WETH_DECIMALS = 18
+USDC_DECIMALS = 6
+
 POLL_INTERVAL = 60
 BLOCK_BATCH = 50
 
@@ -21,6 +24,7 @@ SWAP_TOPIC = Web3.keccak(
     text="Swap(address,address,int256,int256,uint160,uint128,int24)"
 ).hex()
 SWAP_TOPIC = "0x" + SWAP_TOPIC
+
 
 def wait_for_db():
     while True:
@@ -34,6 +38,7 @@ def wait_for_db():
         except psycopg2.OperationalError:
             print("Waiting for Postgres...", flush=True)
             time.sleep(2)
+
 
 conn = wait_for_db()
 cur = conn.cursor()
@@ -60,10 +65,7 @@ while True:
         )
 
         for log in logs:
-            sender = Web3.to_checksum_address(
-                "0x" + log["topics"][1].hex()[-40:]
-            )
-            recipient = Web3.to_checksum_address(
+            trader = Web3.to_checksum_address(
                 "0x" + log["topics"][2].hex()[-40:]
             )
 
@@ -71,20 +73,30 @@ while True:
             amount0 = int.from_bytes(data[0:32], "big", signed=True)
             amount1 = int.from_bytes(data[32:64], "big", signed=True)
 
+            eth_amount = abs(amount0) / 10 ** WETH_DECIMALS
+            usdc_amount = abs(amount1) / 10 ** USDC_DECIMALS
+
+            if amount0 < 0:
+                side = "buy"
+                usd_value = usdc_amount
+            else:
+                side = "sell"
+                usd_value = usdc_amount
+
             cur.execute(
                 """
-                INSERT INTO uniswap_swaps
-                (tx_hash, block_number, pool, sender, recipient, amount0, amount1)
+                INSERT INTO trades
+                (tx_hash, block_number, trader, side, eth_amount, usdc_amount, usd_value)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     log["transactionHash"].hex(),
                     log["blockNumber"],
-                    UNISWAP_POOL,
-                    sender,
-                    recipient,
-                    amount0,
-                    amount1
+                    trader,
+                    side,
+                    eth_amount,
+                    usdc_amount,
+                    usd_value
                 )
             )
 
