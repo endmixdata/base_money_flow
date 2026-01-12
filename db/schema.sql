@@ -26,6 +26,20 @@ CREATE TABLE IF NOT EXISTS blocks (
   timestamp TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS uniswap_swaps (
+  tx_hash TEXT,
+  block_number BIGINT,
+  pool TEXT,
+  sender TEXT,
+  recipient TEXT,
+  amount0 NUMERIC,
+  amount1 NUMERIC,
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_uni_swaps_block ON uniswap_swaps(block_number);
+CREATE INDEX idx_uni_swaps_pool ON uniswap_swaps(pool);
+
 CREATE INDEX idx_swaps_time ON swaps(block_time);
 CREATE INDEX idx_swaps_token ON swaps(token);
 CREATE INDEX idx_swaps_wallet ON swaps(wallet);

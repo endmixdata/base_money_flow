@@ -1,21 +1,36 @@
+import os
 import time
 import psycopg2
 from web3 import Web3
 
 print("Indexer started", flush=True)
 
-w3 = Web3(Web3.HTTPProvider("https://base-mainnet.infura.io/v3/bec07fd60dd44de399e3e68ffc508867"))
+RPC_URL = os.getenv("BASE_RPC_URL")
+assert RPC_URL, "BASE_RPC_URL is not set"
+
+UNISWAP_POOL = Web3.to_checksum_address(
+    "0xd0b53D9277642d899DF5C87A3966A349A798F224"
+)
+
+POLL_INTERVAL = 60
+BLOCK_BATCH = 50
+
+w3 = Web3(Web3.HTTPProvider(RPC_URL))
+
+SWAP_TOPIC = Web3.keccak(
+    text="Swap(address,address,int256,int256,uint160,uint128,int24)"
+).hex()
+SWAP_TOPIC = "0x" + SWAP_TOPIC
 
 def wait_for_db():
     while True:
         try:
-            conn = psycopg2.connect(
+            return psycopg2.connect(
                 host="postgres",
                 dbname="smartmoney",
                 user="smf",
                 password="smf_pass"
             )
-            return conn
         except psycopg2.OperationalError:
             print("Waiting for Postgres...", flush=True)
             time.sleep(2)
@@ -23,18 +38,57 @@ def wait_for_db():
 conn = wait_for_db()
 cur = conn.cursor()
 
+last_block = w3.eth.block_number - 1
+
 while True:
-    block = w3.eth.block_number
-    print("Latest Base block:", block, flush=True)
+    latest = w3.eth.block_number
 
-    cur.execute(
-        """
-        INSERT INTO blocks(block_number)
-        VALUES (%s)
-        ON CONFLICT DO NOTHING
-        """,
-        (block,)
-    )
-    conn.commit()
+    if latest > last_block:
+        from_block = last_block + 1
+        to_block = min(from_block + BLOCK_BATCH, latest)
 
-    time.sleep(30)
+        logs = w3.eth.get_logs({
+            "fromBlock": from_block,
+            "toBlock": to_block,
+            "address": UNISWAP_POOL,
+            "topics": [SWAP_TOPIC]
+        })
+
+        print(
+            f"Blocks {from_block}-{to_block} | swaps: {len(logs)}",
+            flush=True
+        )
+
+        for log in logs:
+            sender = Web3.to_checksum_address(
+                "0x" + log["topics"][1].hex()[-40:]
+            )
+            recipient = Web3.to_checksum_address(
+                "0x" + log["topics"][2].hex()[-40:]
+            )
+
+            data = log["data"]
+            amount0 = int.from_bytes(data[0:32], "big", signed=True)
+            amount1 = int.from_bytes(data[32:64], "big", signed=True)
+
+            cur.execute(
+                """
+                INSERT INTO uniswap_swaps
+                (tx_hash, block_number, pool, sender, recipient, amount0, amount1)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    log["transactionHash"].hex(),
+                    log["blockNumber"],
+                    UNISWAP_POOL,
+                    sender,
+                    recipient,
+                    amount0,
+                    amount1
+                )
+            )
+
+        conn.commit()
+        last_block = to_block
+
+    time.sleep(POLL_INTERVAL)

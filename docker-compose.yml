@@ -16,6 +16,8 @@ services:
     depends_on:
       - postgres
     restart: always
+    environment:
+      BASE_RPC_URL: https://base-mainnet.infura.io/v3/bec07fd60dd44de399e3e68ffc508867
 
 volumes:
   pgdata:
