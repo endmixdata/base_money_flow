@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: smartmoney
+      POSTGRES_USER: smf
+      POSTGRES_PASSWORD: smf_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+
+  indexer:
+    build: ./services/indexer
+    depends_on:
+      - postgres
+    restart: always
+
+volumes:
+  pgdata:
