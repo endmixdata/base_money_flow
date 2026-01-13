@@ -25,7 +25,7 @@ conn = wait_for_db()
 cur = conn.cursor()
 
 while True:
-    # 1. Calculate smart wallets (24h)
+    # 1️⃣ Smart wallets (общие, 24h)
     cur.execute(
         f"""
         WITH ranked AS (
@@ -59,31 +59,39 @@ while True:
             (wallet, trades, volume, rnk)
         )
 
-    # 2. Smart Money Flow
-    for period, interval in INTERVALS.items():
-        cur.execute(
-            f"""
-            SELECT
-              SUM(CASE WHEN side='buy'  THEN usd_value ELSE 0 END),
-              SUM(CASE WHEN side='sell' THEN usd_value ELSE 0 END)
-            FROM trades
-            WHERE trader IN (SELECT wallet FROM smart_wallets)
-              AND timestamp > now() - interval '{interval}'
-            """
-        )
+    # 2️⃣ Список токенов
+    cur.execute("SELECT DISTINCT token FROM trades")
+    tokens = [row[0] for row in cur.fetchall()]
 
-        inflow, outflow = cur.fetchone()
-        inflow = inflow or 0
-        outflow = outflow or 0
-        net_flow = inflow - outflow
+    # 3️⃣ Smart money flow по каждому token
+    for token in tokens:
+        for period, interval in INTERVALS.items():
+            cur.execute(
+                f"""
+                SELECT
+                  SUM(CASE WHEN side='buy'  THEN usd_value ELSE 0 END),
+                  SUM(CASE WHEN side='sell' THEN usd_value ELSE 0 END)
+                FROM trades
+                WHERE token = %s
+                  AND trader IN (SELECT wallet FROM smart_wallets)
+                  AND timestamp > now() - interval '{interval}'
+                """,
+                (token,)
+            )
 
-        cur.execute(
-            """
-            INSERT INTO token_flow (period, inflow, outflow, net_flow)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (f"smart_{period}", inflow, outflow, net_flow)
-        )
+            inflow, outflow = cur.fetchone()
+            inflow = inflow or 0
+            outflow = outflow or 0
+            net_flow = inflow - outflow
+
+            cur.execute(
+                """
+                INSERT INTO token_flow
+                (token, period, inflow, outflow, net_flow)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (token, f"smart_{period}", inflow, outflow, net_flow)
+            )
 
     conn.commit()
     time.sleep(300)

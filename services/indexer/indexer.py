@@ -8,9 +8,25 @@ print("Indexer started", flush=True)
 RPC_URL = os.getenv("BASE_RPC_URL")
 assert RPC_URL, "BASE_RPC_URL is not set"
 
-UNISWAP_POOL = Web3.to_checksum_address(
-    "0xd0b53D9277642d899DF5C87A3966A349A798F224"
-)
+POOLS = [
+    {
+        "token": "WETH",
+        "pool": Web3.to_checksum_address(
+            "0xd0b53D9277642d899DF5C87A3966A349A798F224"
+        ),
+        "base_decimals": 18,
+        "quote_decimals": 6
+    },
+    {
+        "token": "cbBTC",
+        "pool": Web3.to_checksum_address(
+            "0xeC558e484cC9f2210714E345298fdc53B253c27D"
+        ),
+        "base_decimals": 8,
+        "quote_decimals": 6
+    }
+]
+
 
 WETH_DECIMALS = 18
 USDC_DECIMALS = 6
@@ -52,55 +68,55 @@ while True:
         from_block = last_block + 1
         to_block = min(from_block + BLOCK_BATCH, latest)
 
-        logs = w3.eth.get_logs({
-            "fromBlock": from_block,
-            "toBlock": to_block,
-            "address": UNISWAP_POOL,
-            "topics": [SWAP_TOPIC]
-        })
+        for cfg in POOLS:
+            logs = w3.eth.get_logs({
+                "fromBlock": from_block,
+                "toBlock": to_block,
+                "address": cfg["pool"],
+                "topics": [SWAP_TOPIC]
+            })
 
-        print(
-            f"Blocks {from_block}-{to_block} | swaps: {len(logs)}",
-            flush=True
-        )
-
-        for log in logs:
-            trader = Web3.to_checksum_address(
-                "0x" + log["topics"][2].hex()[-40:]
+            print(
+                f"{cfg['token']} | Blocks {from_block}-{to_block} | swaps: {len(logs)}",
+                flush=True
             )
 
-            data = log["data"]
-            amount0 = int.from_bytes(data[0:32], "big", signed=True)
-            amount1 = int.from_bytes(data[32:64], "big", signed=True)
-
-            eth_amount = abs(amount0) / 10 ** WETH_DECIMALS
-            usdc_amount = abs(amount1) / 10 ** USDC_DECIMALS
-
-            if amount0 < 0:
-                side = "buy"
-                usd_value = usdc_amount
-            else:
-                side = "sell"
-                usd_value = usdc_amount
-
-            cur.execute(
-                """
-                INSERT INTO trades
-                (tx_hash, block_number, trader, side, eth_amount, usdc_amount, usd_value)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    log["transactionHash"].hex(),
-                    log["blockNumber"],
-                    trader,
-                    side,
-                    eth_amount,
-                    usdc_amount,
-                    usd_value
+            for log in logs:
+                trader = Web3.to_checksum_address(
+                    "0x" + log["topics"][2].hex()[-40:]
                 )
-            )
+
+                data = log["data"]
+                amount0 = int.from_bytes(data[0:32], "big", signed=True)
+                amount1 = int.from_bytes(data[32:64], "big", signed=True)
+
+                base_amount = abs(amount0) / 10 ** cfg["base_decimals"]
+                quote_amount = abs(amount1) / 10 ** cfg["quote_decimals"]
+
+                side = "buy" if amount0 < 0 else "sell"
+                usd_value = quote_amount
+
+                cur.execute(
+                    """
+                    INSERT INTO trades
+                    (token, tx_hash, block_number, trader, side,
+                     eth_amount, usdc_amount, usd_value)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        cfg["token"],
+                        log["transactionHash"].hex(),
+                        log["blockNumber"],
+                        trader,
+                        side,
+                        base_amount,
+                        quote_amount,
+                        usd_value
+                    )
+                )
 
         conn.commit()
         last_block = to_block
 
     time.sleep(POLL_INTERVAL)
+

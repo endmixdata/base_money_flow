@@ -9,8 +9,8 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 assert BOT_TOKEN, "TELEGRAM_BOT_TOKEN not set"
 assert CHAT_ID, "TELEGRAM_CHAT_ID not set"
 
-ALERT_THRESHOLD = 20000  # USD
-CHECK_INTERVAL = 300     # seconds
+ALERT_THRESHOLD = 20000   # USD
+CHECK_INTERVAL = 300      # seconds
 
 def send_message(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -35,38 +35,42 @@ def wait_for_db():
 conn = wait_for_db()
 cur = conn.cursor()
 
-last_alert_ts = None
+# чтобы не слать один и тот же алерт несколько раз
+last_seen = {}
 
 while True:
     cur.execute(
         """
-        SELECT net_flow, updated_at
+        SELECT token, net_flow, updated_at
         FROM token_flow
         WHERE period = 'smart_1h'
         ORDER BY updated_at DESC
-        LIMIT 1
         """
     )
 
-    row = cur.fetchone()
+    rows = cur.fetchall()
 
-    if row:
-        net_flow, ts = row
+    for token, net_flow, ts in rows:
+        key = f"{token}_smart_1h"
 
-        if last_alert_ts is None or ts > last_alert_ts:
-            if abs(net_flow) >= ALERT_THRESHOLD:
-                direction = "accumulating" if net_flow > 0 else "distributing"
-                sign = "+" if net_flow > 0 else "-"
+        if key in last_seen and ts <= last_seen[key]:
+            continue
 
-                message = (
-                    "🧠 Smart Money Alert (Base)\n\n"
-                    f"Token: WETH\n"
-                    f"Period: 1h\n"
-                    f"Net Flow: {sign}${abs(int(net_flow))}\n\n"
-                    f"Smart wallets are {direction}."
-                )
+        if abs(net_flow) < ALERT_THRESHOLD:
+            continue
 
-                send_message(message)
-                last_alert_ts = ts
+        direction = "accumulating" if net_flow > 0 else "distributing"
+        sign = "+" if net_flow > 0 else "-"
+
+        message = (
+            "🧠 Smart Money Alert (Base)\n\n"
+            f"Token: {token}\n"
+            f"Period: 1h\n"
+            f"Net Flow: {sign}${abs(int(net_flow))}\n\n"
+            f"Smart wallets are {direction}."
+        )
+
+        send_message(message)
+        last_seen[key] = ts
 
     time.sleep(CHECK_INTERVAL)

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS uniswap_swaps (
 );
 
 CREATE TABLE IF NOT EXISTS trades (
+  token TEXT,
   tx_hash TEXT,
   block_number BIGINT,
   trader TEXT,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 
 CREATE TABLE IF NOT EXISTS token_flow (
+  token TEXT,
   period TEXT,             -- '5m', '1h', '24h'
   inflow NUMERIC,
   outflow NUMERIC,
