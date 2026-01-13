@@ -19,5 +19,22 @@ services:
     environment:
       BASE_RPC_URL: https://base-mainnet.infura.io/v3/bec07fd60dd44de399e3e68ffc508867
 
+  analytics:
+    build: ./services/analytics
+    depends_on:
+      - postgres
+    restart: always
+
+  alerts:
+    build: ./services/alerts
+    depends_on:
+      - postgres
+    restart: always
+    environment:
+      TELEGRAM_BOT_TOKEN: "8523642101:AAE-Js27shsgmncxVkMbnTUIHZ9vjS_4JmI"
+      TELEGRAM_CHAT_ID: "390933874"
+
+
+
 volumes:
   pgdata:

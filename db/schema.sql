@@ -48,6 +48,40 @@ CREATE TABLE IF NOT EXISTS trades (
   timestamp TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS token_flow (
+  period TEXT,             -- '5m', '1h', '24h'
+  inflow NUMERIC,
+  outflow NUMERIC,
+  net_flow NUMERIC,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS wallet_stats (
+  wallet TEXT PRIMARY KEY,
+  trade_count INT,
+  buy_volume NUMERIC,
+  sell_volume NUMERIC,
+  net_flow NUMERIC,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS smart_wallets (
+  wallet TEXT PRIMARY KEY,
+  trades INT,
+  volume NUMERIC,
+  rank INT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_smart_wallets_rank ON smart_wallets(rank);
+
+
+CREATE INDEX idx_wallet_stats_flow ON wallet_stats(net_flow);
+
+
+CREATE INDEX idx_flow_period ON token_flow(period);
+
+
 CREATE INDEX idx_trades_block ON trades(block_number);
 CREATE INDEX idx_trades_trader ON trades(trader);
 CREATE INDEX idx_trades_side ON trades(side);
