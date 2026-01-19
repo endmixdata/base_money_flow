@@ -63,7 +63,7 @@ while True:
     cur.execute("SELECT DISTINCT token FROM trades")
     tokens = [row[0] for row in cur.fetchall()]
 
-    # 3️⃣ Smart money flow по каждому token
+    # 3️⃣ SMART money flow (только smart wallets)
     for token in tokens:
         for period, interval in INTERVALS.items():
             cur.execute(
@@ -91,6 +91,35 @@ while True:
                 VALUES (%s, %s, %s, %s, %s)
                 """,
                 (token, f"smart_{period}", inflow, outflow, net_flow)
+            )
+
+    # 4️⃣ RAW money flow (все кошельки)
+    for token in tokens:
+        for period, interval in INTERVALS.items():
+            cur.execute(
+                f"""
+                SELECT
+                  SUM(CASE WHEN side='buy'  THEN usd_value ELSE 0 END),
+                  SUM(CASE WHEN side='sell' THEN usd_value ELSE 0 END)
+                FROM trades
+                WHERE token = %s
+                  AND timestamp > now() - interval '{interval}'
+                """,
+                (token,)
+            )
+
+            inflow, outflow = cur.fetchone()
+            inflow = inflow or 0
+            outflow = outflow or 0
+            net_flow = inflow - outflow
+
+            cur.execute(
+                """
+                INSERT INTO token_flow
+                (token, period, inflow, outflow, net_flow)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (token, f"raw_{period}", inflow, outflow, net_flow)
             )
 
     conn.commit()
