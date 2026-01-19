@@ -31,10 +31,16 @@ services:
       - postgres
     restart: always
     environment:
-      TELEGRAM_BOT_TOKEN: "8523642101:AAE-Js27shsgmncxVkMbnTUIHZ9vjS_4JmI"
-      TELEGRAM_CHAT_ID: "390933874"
-
-
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+  daily:
+    build: ./services/daily
+    depends_on:
+      - postgres
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+    restart: always
 
 volumes:
   pgdata:
