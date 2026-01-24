@@ -124,6 +124,56 @@ while True:
 
     message = "\n".join(lines).strip()
     send_message(message)
+    # ======================================================
+    # TOKEN PROFILES (7D BASELINE)
+    # ======================================================
+    cur.execute(
+        """
+        WITH last_7d AS (
+          SELECT
+            token,
+            period,
+            ABS(net_flow) AS value
+          FROM token_flow
+          WHERE period IN ('raw_1h', 'smart_1h', 'raw_24h')
+            AND updated_at > now() - interval '7 days'
+        ),
+        agg AS (
+          SELECT
+            token,
+            AVG(CASE WHEN period='raw_1h'   THEN value END) AS avg_raw_1h,
+            AVG(CASE WHEN period='smart_1h' THEN value END) AS avg_smart_1h,
+            AVG(CASE WHEN period='raw_24h'  THEN value END) AS avg_volume_24h
+          FROM last_7d
+          GROUP BY token
+        )
+        INSERT INTO token_profiles
+          (token, avg_raw_1h, avg_smart_1h, avg_volume_24h, updated_at)
+        SELECT
+          token,
+          avg_raw_1h,
+          avg_smart_1h,
+          avg_volume_24h,
+          now()
+        FROM agg
+        ON CONFLICT (token) DO UPDATE SET
+          avg_raw_1h     = EXCLUDED.avg_raw_1h,
+          avg_smart_1h   = EXCLUDED.avg_smart_1h,
+          avg_volume_24h = EXCLUDED.avg_volume_24h,
+          updated_at     = now();
+        """
+    )
+
+    conn.commit()
+    # ======================================================
+    # DATA CLEANUP
+    # ======================================================
+    cur.execute("DELETE FROM trades WHERE timestamp < now() - interval '7 days'")
+    cur.execute("DELETE FROM uniswap_swaps WHERE timestamp < now() - interval '3 days'")
+    cur.execute("DELETE FROM blocks WHERE timestamp < now() - interval '3 days'")
+    cur.execute("DELETE FROM token_flow WHERE updated_at < now() - interval '30 days'")
+
+    conn.commit()
 
     last_sent_date = today
     time.sleep(CHECK_INTERVAL)

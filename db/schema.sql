@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS smart_wallets (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS token_profiles (
+  token TEXT PRIMARY KEY,
+  avg_raw_1h NUMERIC,
+  avg_smart_1h NUMERIC,
+  avg_volume_24h NUMERIC,
+  updated_at TIMESTAMP DEFAULT now()
+);
+
 CREATE INDEX idx_smart_wallets_rank ON smart_wallets(rank);
 
 
